@@ -57,6 +57,7 @@ typedef struct action_s {
   js_ref_t *ctx_ref;
   js_ref_t *callback_ref;
   uv_async_t handle;
+  int32_t expected_status;
 } action_t;
 
 static void
@@ -92,11 +93,11 @@ on_uv_async (uv_async_t *handle) {
 
   printf("%s call function w/ checkpoint\n", TAG);
   js_value_t *cb_result;
-  err = js_call_function_with_checkpoint(env, ctx, callback, out_argc, out_argv, &cb_result);
+  int status = js_call_function_with_checkpoint(env, ctx, callback, out_argc, out_argv, &cb_result);
 
-  printf("%s callback returned, err=%i\n", TAG, err);
+  printf("%s callback returned, err=%i expected=%i\n", TAG, status, action->expected_status);
 
-  if (err == 0) {
+  if (status == 0) {
     // cb_result is safe to use
     // but no-op here
   } else {
@@ -106,6 +107,7 @@ on_uv_async (uv_async_t *handle) {
     assert(err == 0);
     printf("%s js_is_exception_pending=%i\n", TAG, is_pending);
   }
+  assert(status == action->expected_status);
 
   // finally cleanup
   uv_close((uv_handle_t *) &action->handle, on_uv_close);
@@ -127,13 +129,13 @@ addon_do_async_callback(js_env_t *env, js_callback_info_t *info) {
   const char *TAG = "[native:inner_pre_io]";
   int err;
 
-  size_t argc = 1;
+  size_t argc = 2;
   js_value_t *argv[argc];
   js_value_t *ctx;
 
   err = js_get_callback_info(env, info, &argc, argv, &ctx, NULL);
   assert(err == 0);
-  assert(argc == 1);
+  assert(argc > 0);
 
   bool is_function;
   err = js_is_function(env, argv[0], &is_function);
@@ -146,6 +148,17 @@ addon_do_async_callback(js_env_t *env, js_callback_info_t *info) {
   assert(err == 0);
 
   action->env = env;
+
+  action->expected_status = 0; // expect default status_ok
+  if (argc > 1) { // status provided
+    bool arg_is_number;
+    err = js_is_number(env, argv[1], &arg_is_number);
+    assert(err == 0);
+    assert(arg_is_number);
+
+    err = js_get_value_int32(env, argv[1], &action->expected_status);
+    assert(err == 0);
+  }
 
   err = js_create_reference(env, argv[0], 1, &action->callback_ref);
   assert(err == 0);
