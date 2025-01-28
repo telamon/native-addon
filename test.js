@@ -1,6 +1,5 @@
 const test = require('brittle')
 const addon = require('.')
-const queueTick = require('queue-tick')
 
 test('inner call', t => {
   const err = addon.do_callback(val => {
@@ -43,18 +42,14 @@ test('proc still running', async t => {
   t.ok('process not killed')
 })
 
-test.solo('status does not leak', async t => {
-  t.plan(1)
+test('status does not leak', async t => {
   const expected_status = 0
   await new Promise(resolve => addon.do_async_callback(resolve, expected_status))
 
-  // this context runs on the checkpoint of callback above
+  // this context runs on the checkpoint of native-call above
 
-  // ERROR! on node (process.nexTick());
-  // throwing unhandled exception, causes previous
-  // js_call_function_with_checkpoint() to return -1
-  // on bare return status is 0.
-  queueTick(() => { throw new Error('boom 2') })
+  queueMicrotask(() => { throw new Error('boom 2') })
+  // process.nextTick(() => { throw new Error('boom 2') }) // leaks -1 status into native call :arrow_up:
 
   const err = await new Promise(uncaught)
   t.is(err.message, 'boom 2', 'ex caught')
