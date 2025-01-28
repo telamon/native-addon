@@ -1,3 +1,4 @@
 const binding = require('./binding')
 
-exports.hello = binding.hello
+exports.do_callback = binding.do_callback
+exports.do_async_callback = binding.do_async_callback
