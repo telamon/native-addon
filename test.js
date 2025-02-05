@@ -66,7 +66,7 @@ test.solo('bench typedarray access', t => {
   // t.ok(addon.typedarray_call_counters().view > 0)
   t.comment('call counters (warmup)', addon.typedarray_call_counters())
 
-  const N = 30000000;
+  const N = 300000000;
   t.comment('peforming', N, 'calls')
 
   let start = Date.now()

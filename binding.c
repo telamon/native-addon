@@ -245,6 +245,10 @@ typedarray_incr_typed_view (js_value_t *receiver, js_value_t *buffer, js_typed_c
   err = js_get_typed_callback_info(info, &env, NULL);
   assert(err == 0);
 
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
   size_t len = 1024;
   uint8_t *data;
   js_typedarray_view_t *view;
@@ -253,6 +257,9 @@ typedarray_incr_typed_view (js_value_t *receiver, js_value_t *buffer, js_typed_c
   assert(len == 1024);
 
   data[0]++; // do nothing controversial
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
 
   return data[0];
 }
