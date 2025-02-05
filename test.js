@@ -55,6 +55,39 @@ test('status does not leak', async t => {
   t.is(err.message, 'boom 2', 'ex caught')
 })
 
+test.solo('bench typedarray access', t => {
+  const buf = new Uint8Array(1024)
+
+  // Warmup hotpaths
+  for (let i = 0; i < 80000; i++) addon.typedarray_incr_scoped(buf)
+  // t.ok(addon.typedarray_call_counters().scoped > 0)
+
+  for (let i = 0; i < 100000; i++) addon.typedarray_incr_view(buf)
+  // t.ok(addon.typedarray_call_counters().view > 0)
+  t.comment('call counters (warmup)', addon.typedarray_call_counters())
+
+  const N = 30000000;
+  t.comment('peforming', N, 'calls')
+
+  let start = Date.now()
+  for (let i = 0; i < N; i++) addon.typedarray_incr_untyped(buf)
+  const untyped_ms = Date.now() - start
+  t.comment('untyped ms', untyped_ms)
+
+  start = Date.now()
+  for (let i = 0; i < N; i++) addon.typedarray_incr_scoped(buf)
+  const scoped_ms = Date.now() - start
+  t.comment('scoped ms', scoped_ms)
+
+  start = Date.now()
+  for (let i = 0; i < N; i++) addon.typedarray_incr_view(buf)
+  const view_ms = Date.now() - start
+  t.comment('view ms', view_ms)
+
+  t.comment('call counters (post bench)', addon.typedarray_call_counters())
+  t.ok('ok')
+})
+
 function uncaught (fn) {
   if (global.Bare) {
     global.Bare.once('uncaughtException', fn)

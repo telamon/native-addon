@@ -182,21 +182,149 @@ addon_do_async_callback(js_env_t *env, js_callback_info_t *info) {
   return action_arraybuffer;
 }
 
+static uint32_t calls_untyped = 0;
+static uint32_t calls_scoped = 0;
+static uint32_t calls_view = 0;
+
+static js_value_t *
+typedarray_incr (js_env_t *env, js_callback_info_t *info) {
+  calls_untyped++;
+  int err;
+  size_t argc = 1;
+  js_value_t *argv[argc];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+  assert(argc == 1);
+
+  size_t len = 1024;
+  uint8_t *data;
+  err = js_get_typedarray_info(env, argv[0], NULL, (void **) &data, &len, NULL, NULL);
+  assert(err == 0);
+  assert(len == 1024);
+
+  data[0]++; // do nothing controversial
+
+  js_value_t *res;
+  err = js_create_uint32(env, data[0], &res);
+  assert(err == 0);
+  return res;
+}
+
+static uint32_t
+typedarray_incr_typed_scoped (js_value_t *receiver, js_value_t *buffer, js_typed_callback_info_t *info) {
+  calls_scoped++;
+  int err;
+  js_env_t *env = NULL;
+  err = js_get_typed_callback_info(info, &env, NULL);
+  assert(err == 0);
+
+  js_handle_scope_t *scope;
+  err = js_open_handle_scope(env, &scope);
+  assert(err == 0);
+
+  size_t len = 1024;
+  uint8_t *data;
+  err = js_get_typedarray_info(env, buffer, NULL, (void **) &data, &len, NULL, NULL);
+  assert(err == 0);
+  assert(len == 1024);
+
+  data[0]++; // do nothing controversial
+
+  err = js_close_handle_scope(env, scope);
+  assert(err == 0);
+
+  return data[0];
+}
+
+static uint32_t
+typedarray_incr_typed_view (js_value_t *receiver, js_value_t *buffer, js_typed_callback_info_t *info) {
+  calls_view++;
+  int err;
+  js_env_t *env = NULL;
+  err = js_get_typed_callback_info(info, &env, NULL);
+  assert(err == 0);
+
+  size_t len = 1024;
+  uint8_t *data;
+  js_typedarray_view_t *view;
+  err = js_get_typedarray_view(env, buffer, NULL, (void **) &data, &len, &view);
+  assert(err == 0);
+  assert(len == 1024);
+
+  data[0]++; // do nothing controversial
+
+  return data[0];
+}
+
+static js_value_t *
+typedarray_call_counters (js_env_t *env, js_callback_info_t *info) {
+  int err;
+  js_value_t *res;
+  err = js_create_object(env, &res);
+  assert(err == 0);
+#define V(name, value) \
+  { \
+    js_value_t *val; \
+    err = js_create_uint32(env, value, &val); \
+    assert(err == 0); \
+    err = js_set_named_property(env, res, name, val); \
+    assert(err == 0); \
+  }
+
+  V("untyped", calls_untyped)
+  V("scoped", calls_scoped)
+  V("view", calls_view)
+#undef V
+  return res;
+}
+
 static js_value_t *
 bare_addon_exports(js_env_t *env, js_value_t *exports) {
   int err;
 
-#define V(name, fn) \
+#define V(name, untyped, signature, typed) \
   { \
     js_value_t *val; \
-    err = js_create_function(env, name, -1, fn, NULL, &val); \
-    assert(err == 0); \
+    if (signature) { \
+      err = js_create_typed_function(env, name, -1, untyped, signature, typed, NULL, &val); \
+      assert(err == 0); \
+    } else { \
+      err = js_create_function(env, name, -1, untyped, NULL, &val); \
+      assert(err == 0); \
+    } \
     err = js_set_named_property(env, exports, name, val); \
     assert(err == 0); \
   }
 
-  V("do_callback", addon_do_callback)
-  V("do_async_callback", addon_do_async_callback)
+  V("do_callback", addon_do_callback, NULL, NULL)
+  V("do_async_callback", addon_do_async_callback, NULL, NULL)
+
+  V("typedarray_incr_scoped",
+    typedarray_incr,
+    &((js_callback_signature_t) {
+      .version = 0,
+      .args_len = 2,
+      .args = (int[]) { js_object, js_object },
+      .result = js_uint32
+    }),
+    typedarray_incr_typed_scoped
+  )
+
+  V("typedarray_incr_view",
+    typedarray_incr,
+    &((js_callback_signature_t) {
+      .version = 0,
+      .args_len = 2,
+      .args = (int[]) { js_object, js_object },
+      .result = js_uint32
+    }),
+    typedarray_incr_typed_view
+  )
+
+  V("typedarray_incr_untyped", typedarray_incr, NULL, NULL)
+
+  V("typedarray_call_counters", typedarray_call_counters, NULL, NULL)
 #undef V
 
   return exports;

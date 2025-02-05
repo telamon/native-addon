@@ -1,4 +1,4 @@
 const binding = require('./binding')
 
-exports.do_callback = binding.do_callback
-exports.do_async_callback = binding.do_async_callback
+// exports = binding (require() is crap)
+for (const key in binding) exports[key] = binding[key]
